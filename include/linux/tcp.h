@@ -244,7 +244,8 @@ struct tcp_sock {
 	/* OOO segments go in this rbtree. Socket lock must be held. */
 	struct rb_root	out_of_order_queue;
 	u32	snd_ssthresh;	/* Slow start size threshold		*/
-	u8	recvmsg_inq : 1;/* Indicate # of bytes in queue upon recvmsg */
+	u32	recvmsg_inq : 1,/* Indicate # of bytes in queue upon recvmsg */
+		fast_ack_mode:1;/* ack ASAP if >1 rcv_mss received? */
 	__cacheline_group_end(tcp_sock_read_rx);
 
 	/* TX read-write hotpath cache lines */
