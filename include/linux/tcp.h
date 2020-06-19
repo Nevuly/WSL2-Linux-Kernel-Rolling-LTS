@@ -302,7 +302,8 @@ struct tcp_sock {
  */
 	struct tcp_options_received rx_opt;
 	u8	nonagle     : 4,/* Disable Nagle algorithm?             */
-		rate_app_limited:1;  /* rate_{delivered,interval_us} limited? */
+		rate_app_limited:1,  /* rate_{delivered,interval_us} limited? */
+		tlp_orig_data_app_limited:1; /* app-limited before TLP rtx? */
 	__cacheline_group_end(tcp_sock_write_txrx);
 
 	/* RX read-write hotpath cache lines */
