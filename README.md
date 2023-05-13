@@ -1,5 +1,8 @@
 # Rolling Release LTS Kernel for WSL2
 
+[![Stable Kernel CI](https://img.shields.io/github/actions/workflow/status/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/build.yml?label=github%20actions%20build&logo=github-actions&logoColor=%23FFFFFF&style=for-the-badge)](https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/Nevuly/WSL2-Linux-Kernel-Rolling-LTS?display_name=tag&label=LATEST&logo=Linux&logoColor=%23FFFFFF&style=for-the-badge)](https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/releases/latest)
+
 Maintainer: Yang Jeong Hun (Nevuly)
 
 ## Current Kernel Status
