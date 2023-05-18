@@ -3,7 +3,7 @@ name: LTS Kernel CI
 on:
   push:
     tags:
-      - 'linux-msft-lts-wsl-6.1.[0-9]+'
+      - 'linux-wsl-lts-6.1.[0-9]+'
 
 run-name: LTS Release Build ${{ github.ref_name }}
 
