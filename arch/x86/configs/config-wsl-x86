@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/x86 6.1.35 Kernel Configuration
+# Linux/x86 6.1.36 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="gcc (GCC) 13.1.1 20230429"
 CONFIG_CC_IS_GCC=y
@@ -3544,7 +3544,7 @@ CONFIG_CIFS_POSIX=y
 # CONFIG_CIFS_FSCACHE is not set
 # CONFIG_CIFS_ROOT is not set
 # CONFIG_SMB_SERVER is not set
-CONFIG_SMBFS_COMMON=y
+CONFIG_SMBFS=y
 # CONFIG_CODA_FS is not set
 # CONFIG_AFS_FS is not set
 CONFIG_9P_FS=y
