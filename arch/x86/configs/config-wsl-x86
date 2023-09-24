@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/x86 6.1.54 Kernel Configuration
+# Linux/x86 6.1.55 Kernel Configuration
 #
 CONFIG_CC_VERSION_TEXT="gcc (GCC) 13.2.1 20230801"
 CONFIG_CC_IS_GCC=y
@@ -1470,8 +1470,6 @@ CONFIG_NET_CLS=y
 CONFIG_NET_CLS_U32=y
 CONFIG_CLS_U32_PERF=y
 CONFIG_CLS_U32_MARK=y
-# CONFIG_NET_CLS_RSVP is not set
-# CONFIG_NET_CLS_RSVP6 is not set
 # CONFIG_NET_CLS_FLOW is not set
 CONFIG_NET_CLS_CGROUP=y
 CONFIG_NET_CLS_BPF=y
