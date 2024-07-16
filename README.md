@@ -53,7 +53,6 @@ file][install-inst] for information on using a custom built kernel.
 ## Credits
  * The Linux community who created a awesome kernel.
  * Microsoft which produced WSL2 and dxgkrnl patches.
- * [justinkb (Paul Mulders)][justinkb] helped when docker desktop can't run correctly.
 
 [wsl2-kernel-6.6]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/tree/wsl-6.6-lts
 [wsl2-kernel-rolling-lts]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS
@@ -63,4 +62,3 @@ file][install-inst] for information on using a custom built kernel.
 [issue]: https://github.com/Nevuly/WSL2-Rolling-Kernel-Issue/issues
 [pr]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/pulls
 [install-inst]: https://docs.microsoft.com/en-us/windows/wsl/wsl-config#configure-global-options-with-wslconfig
-[justinkb]: https://github.com/justinkb
