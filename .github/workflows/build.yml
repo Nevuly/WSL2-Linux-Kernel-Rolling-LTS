@@ -216,7 +216,6 @@ jobs:
 
             **WARNING**
             ARM64 kernel has not been tested. If you have any issues, please leave an issue on the [Issues tab](https://github.com/Nevuly/WSL2-Rolling-Kernel-Issue/issues)!
-            This version not included kernel modules and kernel optionals temporarily.
 
             **Hash Information**
             | File Name | SHA3-512 Checksum |
