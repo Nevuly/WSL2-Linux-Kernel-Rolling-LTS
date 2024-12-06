@@ -1,15 +1,12 @@
 # Rolling Release LTS Kernel for WSL2
 
-[![LTS Kernel CI](https://img.shields.io/github/actions/workflow/status/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/build.yml?label=github%20actions%20build&logo=github-actions&logoColor=%23FFFFFF&style=for-the-badge&labelColor=%23000000)](https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/actions/workflows/build.yml)
-[![Release](https://img.shields.io/github/v/release/Nevuly/WSL2-Linux-Kernel-Rolling-LTS?display_name=tag&label=LATEST&logo=Linux&logoColor=%23FFFFFF&style=for-the-badge&labelColor=%23000000)](https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/releases/latest)
-
 Maintainer: Yang Jeong Hun (Nevuly)
 
 ## Current Kernel Status
 
 | Kernel Version | Status |
 |:--------------:|:------:|
-| [Linux 6.6.x][wsl2-kernel-6.6] | LTS Support |
+| [Linux 6.6.x][wsl2-kernel-6.6] | End Of Life |
 
 ## Introduction
 
@@ -54,7 +51,7 @@ file][install-inst] for information on using a custom built kernel.
  * The Linux community who created a awesome kernel.
  * Microsoft which produced WSL2 and dxgkrnl patches.
 
-[wsl2-kernel-6.6]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/tree/wsl-6.6-lts
+[wsl2-kernel-6.6]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/tree/wsl-6.6-lts-eol
 [wsl2-kernel-rolling-lts]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS
 [about-wsl2]: https://docs.microsoft.com/en-us/windows/wsl/about#what-is-wsl-2
 [gh-actions]: https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS/actions
