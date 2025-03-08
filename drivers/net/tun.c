@@ -580,7 +580,7 @@ static inline bool tun_not_capable(struct tun_struct *tun)
 	struct net *net = dev_net(tun->dev);
 
 	return ((uid_valid(tun->owner) && !uid_eq(cred->euid, tun->owner)) ||
-		  (gid_valid(tun->group) && !in_egroup_p(tun->group))) &&
+		(gid_valid(tun->group) && !in_egroup_p(tun->group))) &&
 		!ns_capable(net->user_ns, CAP_NET_ADMIN);
 }
 
@@ -2447,6 +2447,9 @@ static int tun_xdp_one(struct tun_struct *tun,
 	int ret = 0;
 	bool skb_xdp = false;
 	struct page *page;
+
+	if (unlikely(datasize < ETH_HLEN))
+		return -EINVAL;
 
 	xdp_prog = rcu_dereference(tun->xdp_prog);
 	if (xdp_prog) {
