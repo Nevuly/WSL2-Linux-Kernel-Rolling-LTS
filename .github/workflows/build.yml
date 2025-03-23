@@ -152,7 +152,7 @@ jobs:
           cp .github/scripts/addon-install.sh ${{ matrix.image-name }}-addon_install/
           echo "$version" >> ${{ matrix.image-name }}-addon_install/kernel_version.txt
           tar -czf ${{ matrix.image-name }}-addon_install.tar.gz ${{ matrix.image-name }}-addon_install && mv ${{ matrix.image-name }}-addon_install.tar.gz ../
-          echo "Done
+          echo "Done"
 
       - name: Generate SHA-256 Checksum
         id: gen-sha-256
