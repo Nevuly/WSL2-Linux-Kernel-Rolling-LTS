@@ -60,11 +60,10 @@ jobs:
           if [ ${{ matrix.arch }} == "x86" ]
           then
           cd ..
-          ZFS_VER=$(curl -s https://api.github.com/repos/openzfs/zfs/releases/latest | jq -r .tag_name)
           echo ""
-          echo "Download ZFS ($ZFS_VER)"
+          echo "Download ZFS"
           echo ""
-          git clone https://github.com/openzfs/zfs.git --depth 1 -b $ZFS_VER zfs
+          git clone https://github.com/openzfs/zfs.git --depth 1 zfs
           cd zfs
           ./autogen.sh
           ./configure --with-linux="$(pwd)/../linux" --with-linux-obj="$(pwd)/../linux"
