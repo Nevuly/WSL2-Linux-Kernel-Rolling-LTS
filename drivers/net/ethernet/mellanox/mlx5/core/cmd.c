@@ -289,6 +289,10 @@ static void poll_timeout(struct mlx5_cmd_work_ent *ent)
 			return;
 		}
 		cond_resched();
+		if (mlx5_cmd_is_down(dev)) {
+			ent->ret = -ENXIO;
+			return;
+		}
 	} while (time_before(jiffies, poll_end));
 
 	ent->ret = -ETIMEDOUT;
@@ -1056,7 +1060,7 @@ static void cmd_work_handler(struct work_struct *work)
 		poll_timeout(ent);
 		/* make sure we read the descriptor after ownership is SW */
 		rmb();
-		mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, (ent->ret == -ETIMEDOUT));
+		mlx5_cmd_comp_handler(dev, 1ULL << ent->idx, !!ent->ret);
 	}
 }
 
@@ -1829,7 +1833,7 @@ static struct mlx5_cmd_msg *alloc_msg(struct mlx5_core_dev *dev, int in_size,
 	if (in_size <= 16)
 		goto cache_miss;
 
-	for (i = 0; i < MLX5_NUM_COMMAND_CACHES; i++) {
+	for (i = 0; i < dev->profile.num_cmd_caches; i++) {
 		ch = &cmd->cache[i];
 		if (in_size > ch->max_inbox_size)
 			continue;
@@ -2125,7 +2129,7 @@ static void destroy_msg_cache(struct mlx5_core_dev *dev)
 	struct mlx5_cmd_msg *n;
 	int i;
 
-	for (i = 0; i < MLX5_NUM_COMMAND_CACHES; i++) {
+	for (i = 0; i < dev->profile.num_cmd_caches; i++) {
 		ch = &dev->cmd.cache[i];
 		list_for_each_entry_safe(msg, n, &ch->head, list) {
 			list_del(&msg->list);
@@ -2155,7 +2159,7 @@ static void create_msg_cache(struct mlx5_core_dev *dev)
 	int k;
 
 	/* Initialize and fill the caches with initial entries */
-	for (k = 0; k < MLX5_NUM_COMMAND_CACHES; k++) {
+	for (k = 0; k < dev->profile.num_cmd_caches; k++) {
 		ch = &cmd->cache[k];
 		spin_lock_init(&ch->lock);
 		INIT_LIST_HEAD(&ch->head);

@@ -35,7 +35,8 @@
 #include "en.h"
 #include "port.h"
 
-#define MLX5E_MAX_BUFFER 8
+#define MLX5E_MAX_NETWORK_BUFFER 8
+#define MLX5E_TOTAL_BUFFERS 10
 #define MLX5E_DEFAULT_CABLE_LEN 7 /* 7 meters */
 
 #define MLX5_BUFFER_SUPPORTED(mdev) (MLX5_CAP_GEN(mdev, pcam_reg) && \
@@ -60,26 +61,16 @@ struct mlx5e_bufferx_reg {
 struct mlx5e_port_buffer {
 	u32                       port_buffer_size;
 	u32                       spare_buffer_size;
-	struct mlx5e_bufferx_reg  buffer[MLX5E_MAX_BUFFER];
+	u32                       headroom_size;	  /* Buffers 0-7 */
+	u32                       internal_buffers_size;  /* Buffers 8-9 */
+	struct mlx5e_bufferx_reg  buffer[MLX5E_MAX_NETWORK_BUFFER];
 };
 
-#ifdef CONFIG_MLX5_CORE_EN_DCB
 int mlx5e_port_manual_buffer_config(struct mlx5e_priv *priv,
 				    u32 change, unsigned int mtu,
 				    struct ieee_pfc *pfc,
 				    u32 *buffer_size,
 				    u8 *prio2buffer);
-#else
-static inline int
-mlx5e_port_manual_buffer_config(struct mlx5e_priv *priv,
-				u32 change, unsigned int mtu,
-				void *pfc,
-				u32 *buffer_size,
-				u8 *prio2buffer)
-{
-	return 0;
-}
-#endif
 
 int mlx5e_port_query_buffer(struct mlx5e_priv *priv,
 			    struct mlx5e_port_buffer *port_buffer);
