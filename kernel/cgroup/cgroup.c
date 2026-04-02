@@ -2530,6 +2530,7 @@ static void cgroup_migrate_add_task(struct task_struct *task,
 
 	mgctx->tset.nr_tasks++;
 
+	css_set_skip_task_iters(cset, task);
 	list_move_tail(&task->cg_list, &cset->mg_tasks);
 	if (list_empty(&cset->mg_node))
 		list_add_tail(&cset->mg_node,
@@ -5481,9 +5482,9 @@ static void css_free_rwork_fn(struct work_struct *work)
 			 * children.
 			 */
 			cgroup_put(cgroup_parent(cgrp));
-			kernfs_put(cgrp->kn);
 			psi_cgroup_free(cgrp);
 			cgroup_rstat_exit(cgrp);
+			kernfs_put(cgrp->kn);
 			kfree(cgrp);
 		} else {
 			/*

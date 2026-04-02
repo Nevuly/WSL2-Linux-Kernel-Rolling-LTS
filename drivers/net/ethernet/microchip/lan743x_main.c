@@ -2494,8 +2494,7 @@ static int lan743x_rx_process_buffer(struct lan743x_rx *rx)
 
 	/* save existing skb, allocate new skb and map to dma */
 	skb = buffer_info->skb;
-	if (lan743x_rx_init_ring_element(rx, rx->last_head,
-					 GFP_ATOMIC | GFP_DMA)) {
+	if (lan743x_rx_init_ring_element(rx, rx->last_head, GFP_ATOMIC)) {
 		/* failed to allocate next skb.
 		 * Memory is very low.
 		 * Drop this packet and reuse buffer.
@@ -3055,6 +3054,11 @@ static void lan743x_phylink_mac_link_up(struct phylink_config *config,
 		mac_cr |= MAC_CR_CFG_H_;
 	else if (speed == SPEED_100)
 		mac_cr |= MAC_CR_CFG_L_;
+
+	if (duplex == DUPLEX_FULL)
+		mac_cr |= MAC_CR_DPX_;
+	else
+		mac_cr &= ~MAC_CR_DPX_;
 
 	lan743x_csr_write(adapter, MAC_CR, mac_cr);
 
