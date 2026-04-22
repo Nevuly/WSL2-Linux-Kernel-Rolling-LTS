@@ -16,6 +16,8 @@ jobs:
     uses: Nevuly/WSL2-Linux-Kernel-Rolling-LTS/.github/workflows/build.yml@master
     with:
       tag_name: ${{ github.ref_name }}
+      build_type: current
+      build_rt: true
       build_zfs: true
       is_release: ${{ github.event_name != 'pull_request' }}
     secrets: inherit
