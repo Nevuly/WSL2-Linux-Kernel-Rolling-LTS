@@ -99,6 +99,7 @@ modules.order
 !.cocciconfig
 !.get_maintainer.ignore
 !.gitattributes
+!.github
 !.gitignore
 !.kunitconfig
 !.mailmap
