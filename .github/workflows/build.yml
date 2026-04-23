@@ -53,6 +53,18 @@ jobs:
         run: |
           git clone https://github.com/Nevuly/WSL2-Linux-Kernel-Rolling-LTS.git --depth 1 -b ${{ inputs.tag_name }} linux
 
+      - name: Check Kernel Version
+        id: check-version
+        run: |
+          if [ ${{ inputs.build_type }} == "empus" ]; then
+          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
+          echo "KERNEL_EMPUS_PHASE=$phase" >> $GITHUB_OUTPUT
+          else
+          IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
+          fi
+          echo "KERNEL_VERSION=$version" >> $GITHUB_OUTPUT
+          echo "Kernel Version: $version"
+
       - name: Build WSL2 LTS Kernel
         run: |
           cd linux
@@ -69,18 +81,16 @@ jobs:
           cd linux
           mkdir -p ${{ matrix.image-name }}-addon_install && make modules_install INSTALL_MOD_PATH=${{ matrix.image-name }}-addon_install
           if [ ${{ inputs.build_type }} == "empus" ]; then
-          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS-EMPUS+/build
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+/build
           else
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS-EMPUS+/build
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+/build
           fi
           else
-          IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS+/build
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+/build
           else
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS+/build
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+/build
           fi
           fi
 
@@ -89,17 +99,15 @@ jobs:
           cd linux
           if [ ${{ inputs.build_type }} == "empus" ]; then
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
-          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS-EMPUS+/build
+          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+/build
           else
-          IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
-          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS-EMPUS+/build
+          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+/build
           fi
           else
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS+/build
+          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+/build
           else
-          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS+/build
+          export addon_path=${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+/build
           fi
           fi
           mkdir -p $addon_path
@@ -173,15 +181,15 @@ jobs:
           cp -r Documentation $addon_path/Documentation
           if [ ${{ inputs.build_type }} == "empus" ]; then
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS-EMPUS+/build/${{ matrix.image-name }}-addon_install
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+/build/${{ matrix.image-name }}-addon_install
           else
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS-EMPUS+/build/${{ matrix.image-name }}-addon_install
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+/build/${{ matrix.image-name }}-addon_install
           fi
           else
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS+/build/${{ matrix.image-name }}-addon_install
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+/build/${{ matrix.image-name }}-addon_install
           else
-          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS+/build/${{ matrix.image-name }}-addon_install
+          rm -rf ${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+/build/${{ matrix.image-name }}-addon_install
           fi
           fi
 
@@ -202,22 +210,20 @@ jobs:
         if: ${{ inputs.build_zfs }}
         run: |
           if [ ${{ inputs.build_type }} == "empus" ]; then
-          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS-EMPUS+/extra
-          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS-EMPUS+/extra \;
+          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+/extra
+          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+/extra \;
           else
-          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS-EMPUS+/extra
-          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS-EMPUS+/extra \;
+          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+/extra
+          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+/extra \;
           fi
           else
-          IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS+/extra
-          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-LTS+/extra \;
+          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+/extra
+          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+/extra \;
           else
-          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS+/extra
-          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/$version-WSL2-RT-LTS+/extra \;
+          mkdir -p linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+/extra
+          find zfs/module -name "*.ko" -exec cp {} linux/${{ matrix.image-name }}-addon_install/lib/modules/${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+/extra \;
           fi
           fi
 
@@ -225,18 +231,16 @@ jobs:
         run: |
           cd linux
           if [ ${{ inputs.build_type }} == "empus" ]; then
-          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "$version-WSL2-LTS-EMPUS+" ${{ matrix.image-name }}-addon.vhdx
+          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS-EMPUS+" ${{ matrix.image-name }}-addon.vhdx
           else
-          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "$version-WSL2-RT-LTS-EMPUS+" ${{ matrix.image-name }}-addon.vhdx
+          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS-EMPUS+" ${{ matrix.image-name }}-addon.vhdx
           fi
           else
-          IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
           if [ ${{ matrix.arch }} == "x86" ] || [ ${{ matrix.arch }} == "arm64" ]; then
-          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "$version-WSL2-LTS+" ${{ matrix.image-name }}-addon.vhdx
+          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-LTS+" ${{ matrix.image-name }}-addon.vhdx
           else
-          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "$version-WSL2-RT-LTS+" ${{ matrix.image-name }}-addon.vhdx
+          sudo ../.github/scripts/gen_modules_vhdx.sh "$PWD/${{ matrix.image-name }}-addon_install/" "${{ steps.check-version.outputs.KERNEL_VERSION }}-WSL2-RT-LTS+" ${{ matrix.image-name }}-addon.vhdx
           fi
           fi
           7z a -mx=9 ${{ matrix.image-name }}-addon.vhdx.7z ${{ matrix.image-name }}-addon.vhdx > /dev/null
@@ -249,10 +253,6 @@ jobs:
           read -r imageSHA rest <<< "$(sha256sum ${{ matrix.image-name }})"
           read -r addonSHA rest <<< "$(sha256sum ${{ matrix.image-name }}-addon.vhdx)"
           read -r addon7zSHA rest <<< "$(sha256sum ${{ matrix.image-name }}-addon.vhdx.7z)"
-          if [ ${{ inputs.build_type }} == "empus" ]; then
-          IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
-          echo "SUMMARY_EMPUS_NUMBER=$phase" >> $GITHUB_OUTPUT
-          fi
           {
             echo "SUMMARY_ROWS<<EOF"
             echo "| ${{ matrix.image-name }} | $imageSHA |"
@@ -290,12 +290,12 @@ jobs:
         run: |
           {
             if [ ${{ inputs.build_type }} == "empus" ]; then
-            echo "## LTS Extended Maintenance Phase ${{ steps.gen-sha-256.outputs.SUMMARY_EMPUS_NUMBER }} Update Build ${{ inputs.tag_name }} (Arch: ${{ matrix.arch }})"
+            echo "## ${{ steps.check-version.outputs.KERNEL_VERSION }} LTS Extended Maintenance Phase ${{ steps.check-version.outputs.KERNEL_EMPUS_PHASE }} Update Build (${{ matrix.arch }})"
             echo
             echo "> [!NOTE]"
             echo "> **This build not be release.**"
             else
-            echo "## LTS Build ${{ inputs.tag_name }} (Arch: ${{ matrix.arch }})"
+            echo "## ${{ steps.check-version.outputs.KERNEL_VERSION }} LTS Build (${{ matrix.arch }})"
             fi
             echo
             echo "### Hash Information"
