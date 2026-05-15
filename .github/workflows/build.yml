@@ -59,6 +59,11 @@ jobs:
           if [ ${{ inputs.build_type }} == "empus" ]; then
           IFS=- read -r var1 var2 var3 version var4 phase <<< ${{ inputs.tag_name }}
           echo "KERNEL_EMPUS_PHASE=$phase" >> $GITHUB_OUTPUT
+          if [[ $phase =~ ^[0-9]+\.[0-9]+$ ]]; then
+          echo "KERNEL_EMPUS_OOB=true" >> $GITHUB_OUTPUT
+          else
+          echo "KERNEL_EMPUS_OOB=false" >> $GITHUB_OUTPUT
+          fi
           else
           IFS=- read -r var1 var2 var3 version <<< ${{ inputs.tag_name }}
           fi
@@ -291,7 +296,11 @@ jobs:
         run: |
           {
             if [ ${{ inputs.build_type }} == "empus" ]; then
+            if [ ${{ steps.check-version.outputs.KERNEL_EMPUS_OOB }} == "true" ]; then
+            echo "## ${{ steps.check-version.outputs.KERNEL_VERSION }} LTS Extended Maintenance Phase ${{ steps.check-version.outputs.KERNEL_EMPUS_PHASE }} Update Build [**OOB**] (${{ matrix.arch }})"
+            else
             echo "## ${{ steps.check-version.outputs.KERNEL_VERSION }} LTS Extended Maintenance Phase ${{ steps.check-version.outputs.KERNEL_EMPUS_PHASE }} Update Build (${{ matrix.arch }})"
+            fi
             echo
             echo "> [!NOTE]"
             echo "> **This build not be release.**"
