@@ -377,11 +377,7 @@ static __always_inline u64 read_hv_clock_msr(void)
 	 * noinstr. Notable; while HV_REGISTER_TIME_REF_COUNT is a synthetic
 	 * register it doesn't need the GHCB path.
 	 */
-#ifdef CONFIG_ARM64
-	return hv_get_register(HV_REGISTER_TIME_REF_COUNT);
-#else
 	return hv_raw_get_register(HV_REGISTER_TIME_REF_COUNT);
-#endif
 }
 
 /*
@@ -395,12 +391,7 @@ static __always_inline u64 read_hv_clock_msr(void)
 static union {
 	struct ms_hyperv_tsc_page page;
 	u8 reserved[PAGE_SIZE];
-} tsc_pg
-#ifdef CONFIG_ARM64
-    __aligned(PAGE_SIZE);
-#else
-    __bss_decrypted __aligned(PAGE_SIZE);
-#endif
+} tsc_pg __bss_decrypted __aligned(PAGE_SIZE);
 
 static struct ms_hyperv_tsc_page *tsc_page = &tsc_pg.page;
 static unsigned long tsc_pfn;
