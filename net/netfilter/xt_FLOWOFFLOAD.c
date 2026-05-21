@@ -8,6 +8,7 @@
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/netfilter.h>
+#include <linux/netfilter/x_tables.h>
 #include <linux/netfilter/xt_FLOWOFFLOAD.h>
 #include <linux/if_vlan.h>
 #include <net/ip.h>
