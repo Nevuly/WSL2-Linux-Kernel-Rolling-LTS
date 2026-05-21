@@ -1257,9 +1257,9 @@ static unsigned int nf_nat_handle_postrouting(u8 nfproto, struct sk_buff *skb, u
 	enum ip_conntrack_info ctinfo;
 	struct nf_conn_nat *nat;
 	struct nf_conntrack_tuple *ct_tuple, *ct_tuple_origin;
-	uint16_t port, original_port, want_port;
+	uint16_t port, original_port, want_port = 0;
 	uint8_t protonum;
-	bool is_src_mapping_active;
+	bool is_src_mapping_active = false;
 
 	/* NFPROTO specific def */
 	struct nat_mapping *mapping, *src_mapping;
