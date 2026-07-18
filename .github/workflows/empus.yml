@@ -11,10 +11,10 @@ run-name: LTS EMPUS Build ${{ github.ref_name }}
 jobs:
   call-core-workflow:
     name: LTS EMPUS Kernel Build
-    uses: Nevuly/WSL2-Linux-Kernel-Rolling-LTS/.github/workflows/build.yml@master
+    uses: Nevuly/excavator/.github/workflows/excavator.yml@master
     with:
       tag_name: ${{ github.ref_name }}
-      build_type: empus
+      build_type: lts-empus
       build_rt: false
       build_zfs: true
       is_release: false
