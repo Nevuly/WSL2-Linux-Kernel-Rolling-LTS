@@ -14,6 +14,7 @@
 #include <net/bluetooth/bluetooth.h>
 #include <net/bluetooth/hci_core.h>
 #include <net/bluetooth/iso.h>
+#include "eir.h"
 
 static const struct proto_ops iso_sock_ops;
 
@@ -47,6 +48,7 @@ static void iso_sock_kill(struct sock *sk);
 
 #define EIR_SERVICE_DATA_LENGTH 4
 #define BASE_MAX_LENGTH (HCI_MAX_PER_AD_LENGTH - EIR_SERVICE_DATA_LENGTH)
+#define EIR_BAA_SERVICE_UUID	0x1851
 
 /* iso_pinfo flags values */
 enum {
@@ -765,6 +767,7 @@ static void iso_sock_disconn(struct sock *sk)
 	iso_sock_set_timer(sk, ISO_DISCONN_TIMEOUT);
 	iso_conn_lock(iso_pi(sk)->conn);
 	hci_conn_drop(iso_pi(sk)->conn->hcon);
+	iso_pi(sk)->conn->hcon->iso_data = NULL;
 	iso_pi(sk)->conn->hcon = NULL;
 	iso_conn_unlock(iso_pi(sk)->conn);
 }
@@ -1436,7 +1439,7 @@ static bool check_bcast_qos(struct bt_iso_qos *qos)
 		return false;
 
 	if (!qos->bcast.timeout)
-		qos->bcast.sync_timeout = BT_ISO_SYNC_TIMEOUT;
+		qos->bcast.timeout = BT_ISO_SYNC_TIMEOUT;
 
 	if (qos->bcast.timeout < 0x000a || qos->bcast.timeout > 0x4000)
 		return false;
@@ -1586,6 +1589,8 @@ static int iso_sock_getsockopt(struct socket *sock, int level, int optname,
 
 		len = min_t(unsigned int, len, base_len);
 		if (copy_to_user(optval, base, len))
+			err = -EFAULT;
+		if (put_user(len, optlen))
 			err = -EFAULT;
 
 		break;
@@ -1928,12 +1933,16 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 
 	ev3 = hci_recv_event_data(hdev, HCI_EV_LE_PER_ADV_REPORT);
 	if (ev3) {
+		size_t base_len = ev3->length;
+		u8 *base;
+
 		sk = iso_get_sock_listen(&hdev->bdaddr, bdaddr,
 					 iso_match_sync_handle_pa_report, ev3);
-
-		if (sk) {
-			memcpy(iso_pi(sk)->base, ev3->data, ev3->length);
-			iso_pi(sk)->base_len = ev3->length;
+		base = eir_get_service_data(ev3->data, ev3->length,
+					    EIR_BAA_SERVICE_UUID, &base_len);
+		if (base && sk && base_len <= sizeof(iso_pi(sk)->base)) {
+			memcpy(iso_pi(sk)->base, base, base_len);
+			iso_pi(sk)->base_len = base_len;
 		}
 	} else {
 		sk = iso_get_sock_listen(&hdev->bdaddr, BDADDR_ANY, NULL, NULL);
@@ -1955,7 +1964,7 @@ done:
 
 static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 {
-	if (hcon->type != ISO_LINK) {
+	if (hcon->type != CIS_LINK && hcon->type != BIS_LINK) {
 		if (hcon->type != LE_LINK)
 			return;
 
@@ -1996,7 +2005,7 @@ static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 
 static void iso_disconn_cfm(struct hci_conn *hcon, __u8 reason)
 {
-	if (hcon->type != ISO_LINK)
+	if (hcon->type != CIS_LINK && hcon->type != BIS_LINK)
 		return;
 
 	BT_DBG("hcon %p reason %d", hcon, reason);
