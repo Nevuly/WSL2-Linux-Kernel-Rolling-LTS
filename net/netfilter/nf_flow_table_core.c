@@ -76,12 +76,8 @@ EXPORT_SYMBOL_GPL(flow_offload_alloc);
 
 static u32 flow_offload_dst_cookie(struct flow_offload_tuple *flow_tuple)
 {
-	const struct rt6_info *rt;
-
-	if (flow_tuple->l3proto == NFPROTO_IPV6) {
-		rt = (const struct rt6_info *)flow_tuple->dst_cache;
-		return rt6_get_cookie(rt);
-	}
+	if (flow_tuple->l3proto == NFPROTO_IPV6)
+		return rt6_get_cookie(dst_rt6_info(flow_tuple->dst_cache));
 
 	return 0;
 }
@@ -279,17 +275,18 @@ int flow_offload_add(struct nf_flowtable *flow_table, struct flow_offload *flow)
 	flow->timeout = nf_flowtable_time_stamp + flow_offload_get_timeout(flow);
 
 	err = rhashtable_insert_fast(&flow_table->rhashtable,
-				     &flow->tuplehash[0].node,
+				     &flow->tuplehash[FLOW_OFFLOAD_DIR_REPLY].node,
 				     nf_flow_offload_rhash_params);
 	if (err < 0)
 		return err;
 
+	/* GC only iterates original-direction entries; publish original last. */
 	err = rhashtable_insert_fast(&flow_table->rhashtable,
-				     &flow->tuplehash[1].node,
+				     &flow->tuplehash[FLOW_OFFLOAD_DIR_ORIGINAL].node,
 				     nf_flow_offload_rhash_params);
 	if (err < 0) {
 		rhashtable_remove_fast(&flow_table->rhashtable,
-				       &flow->tuplehash[0].node,
+				       &flow->tuplehash[FLOW_OFFLOAD_DIR_REPLY].node,
 				       nf_flow_offload_rhash_params);
 		return err;
 	}
