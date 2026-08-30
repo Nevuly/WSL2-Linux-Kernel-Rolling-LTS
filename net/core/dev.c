@@ -5116,12 +5116,16 @@ u32 bpf_prog_run_generic_xdp(struct sk_buff *skb, struct xdp_buff *xdp,
 	}
 
 	/* XDP frag metadata (e.g. nr_frags) are updated in eBPF helpers
-	 * (e.g. bpf_xdp_adjust_tail), we need to update data_len here.
+	 * (e.g. bpf_xdp_adjust_tail). Remove the old fragment contribution
+	 * from skb->len before updating data_len, then add the new one back.
 	 */
-	if (xdp_buff_has_frags(xdp))
+	skb->len -= skb->data_len;
+	if (xdp_buff_has_frags(xdp)) {
 		skb->data_len = skb_shinfo(skb)->xdp_frags_size;
-	else
+		skb->len += skb->data_len;
+	} else {
 		skb->data_len = 0;
+	}
 
 	/* check if XDP changed eth hdr such SKB needs update */
 	eth = (struct ethhdr *)xdp->data;
@@ -11065,6 +11069,20 @@ struct rtnl_link_stats64 *dev_get_stats(struct net_device *dev,
 {
 	const struct net_device_ops *ops = dev->netdev_ops;
 	const struct net_device_core_stats __percpu *p;
+
+	/*
+	 * IPv{4,6} and udp tunnels share common stat helpers and use
+	 * different stat type (NETDEV_PCPU_STAT_TSTATS vs
+	 * NETDEV_PCPU_STAT_DSTATS). Ensure the accounting is consistent.
+	 */
+	BUILD_BUG_ON(offsetof(struct pcpu_sw_netstats, rx_bytes) !=
+		     offsetof(struct pcpu_dstats, rx_bytes));
+	BUILD_BUG_ON(offsetof(struct pcpu_sw_netstats, rx_packets) !=
+		     offsetof(struct pcpu_dstats, rx_packets));
+	BUILD_BUG_ON(offsetof(struct pcpu_sw_netstats, tx_bytes) !=
+		     offsetof(struct pcpu_dstats, tx_bytes));
+	BUILD_BUG_ON(offsetof(struct pcpu_sw_netstats, tx_packets) !=
+		     offsetof(struct pcpu_dstats, tx_packets));
 
 	if (ops->ndo_get_stats64) {
 		memset(storage, 0, sizeof(*storage));

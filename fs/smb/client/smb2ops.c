@@ -3315,7 +3315,6 @@ static long smb3_zero_range(struct file *file, struct cifs_tcon *tcon,
 	trace_smb3_zero_enter(xid, cfile->fid.persistent_fid, tcon->tid,
 			      ses->Suid, offset, len);
 
-	inode_lock(inode);
 	filemap_invalidate_lock(inode->i_mapping);
 
 	i_size = i_size_read(inode);
@@ -3333,6 +3332,7 @@ static long smb3_zero_range(struct file *file, struct cifs_tcon *tcon,
 	 * first, otherwise the data may be inconsistent with the server.
 	 */
 	truncate_pagecache_range(inode, offset, offset + len - 1);
+	netfs_wait_for_outstanding_io(inode);
 
 	/* if file not oplocked can't be sure whether asking to extend size */
 	rc = -EOPNOTSUPP;
@@ -3361,7 +3361,6 @@ static long smb3_zero_range(struct file *file, struct cifs_tcon *tcon,
 
  zero_range_exit:
 	filemap_invalidate_unlock(inode->i_mapping);
-	inode_unlock(inode);
 	free_xid(xid);
 	if (rc)
 		trace_smb3_zero_err(xid, cfile->fid.persistent_fid, tcon->tid,
@@ -3385,7 +3384,6 @@ static long smb3_punch_hole(struct file *file, struct cifs_tcon *tcon,
 
 	xid = get_xid();
 
-	inode_lock(inode);
 	/* Need to make file sparse, if not already, before freeing range. */
 	/* Consider adding equivalent for compressed since it could also work */
 	rc = smb2_set_sparse(xid, tcon, cfile, inode, set_sparse);
@@ -3398,6 +3396,7 @@ static long smb3_punch_hole(struct file *file, struct cifs_tcon *tcon,
 	 * caches first, otherwise the data may be inconsistent with the server.
 	 */
 	truncate_pagecache_range(inode, offset, offset + len - 1);
+	netfs_wait_for_outstanding_io(inode);
 
 	cifs_dbg(FYI, "Offset %lld len %lld\n", offset, len);
 
@@ -3432,7 +3431,6 @@ static long smb3_punch_hole(struct file *file, struct cifs_tcon *tcon,
 unlock:
 	filemap_invalidate_unlock(inode->i_mapping);
 out:
-	inode_unlock(inode);
 	free_xid(xid);
 	return rc;
 }
@@ -3482,6 +3480,7 @@ static int smb3_simple_fallocate_range(unsigned int xid,
 	struct file_allocated_range_buffer in_data, *out_data = NULL, *tmp_data;
 	u32 out_data_len;
 	char *buf = NULL;
+	u64 range_start, range_len, range_end;
 	loff_t l;
 	int rc;
 
@@ -3518,13 +3517,21 @@ static int smb3_simple_fallocate_range(unsigned int xid,
 			goto out;
 		}
 
-		if (off < le64_to_cpu(tmp_data->file_offset)) {
+		range_start = le64_to_cpu(tmp_data->file_offset);
+		range_len = le64_to_cpu(tmp_data->length);
+		if (check_add_overflow(range_start, range_len, &range_end) ||
+		    range_end > S64_MAX) {
+			rc = -EINVAL;
+			goto out;
+		}
+
+		if (off < range_start) {
 			/*
 			 * We are at a hole. Write until the end of the region
 			 * or until the next allocated data,
 			 * whichever comes next.
 			 */
-			l = le64_to_cpu(tmp_data->file_offset) - off;
+			l = range_start - off;
 			if (len < l)
 				l = len;
 			rc = smb3_simple_fallocate_write_range(xid, tcon,
@@ -3541,11 +3548,13 @@ static int smb3_simple_fallocate_range(unsigned int xid,
 		 * until the end of the data or the end of the region
 		 * we are supposed to fallocate, whichever comes first.
 		 */
-		l = le64_to_cpu(tmp_data->length);
-		if (len < l)
-			l = len;
-		off += l;
-		len -= l;
+		if (off < range_end) {
+			l = range_end - off;
+			if (len < l)
+				l = len;
+			off += l;
+			len -= l;
+		}
 
 		tmp_data = &tmp_data[1];
 		out_data_len -= sizeof(struct file_allocated_range_buffer);
@@ -3698,8 +3707,6 @@ static long smb3_collapse_range(struct file *file, struct cifs_tcon *tcon,
 
 	xid = get_xid();
 
-	inode_lock(inode);
-
 	old_eof = i_size_read(inode);
 	if ((off >= old_eof) ||
 	    off + len >= old_eof) {
@@ -3714,6 +3721,7 @@ static long smb3_collapse_range(struct file *file, struct cifs_tcon *tcon,
 
 	truncate_pagecache_range(inode, off, old_eof);
 	ictx->zero_point = old_eof;
+	netfs_wait_for_outstanding_io(inode);
 
 	rc = smb2_copychunk_range(xid, cfile, cfile, off + len,
 				  old_eof - off - len, off);
@@ -3734,8 +3742,7 @@ static long smb3_collapse_range(struct file *file, struct cifs_tcon *tcon,
 	fscache_resize_cookie(cifs_inode_cookie(inode), new_eof);
 out_2:
 	filemap_invalidate_unlock(inode->i_mapping);
- out:
-	inode_unlock(inode);
+out:
 	free_xid(xid);
 	return rc;
 }
@@ -3752,8 +3759,6 @@ static long smb3_insert_range(struct file *file, struct cifs_tcon *tcon,
 
 	xid = get_xid();
 
-	inode_lock(inode);
-
 	old_eof = i_size_read(inode);
 	if (off >= old_eof) {
 		rc = -EINVAL;
@@ -3768,6 +3773,7 @@ static long smb3_insert_range(struct file *file, struct cifs_tcon *tcon,
 	if (rc < 0)
 		goto out_2;
 	truncate_pagecache_range(inode, off, old_eof);
+	netfs_wait_for_outstanding_io(inode);
 
 	rc = SMB2_set_eof(xid, tcon, cfile->fid.persistent_fid,
 			  cfile->fid.volatile_fid, cfile->pid, new_eof);
@@ -3790,8 +3796,7 @@ static long smb3_insert_range(struct file *file, struct cifs_tcon *tcon,
 	rc = 0;
 out_2:
 	filemap_invalidate_unlock(inode->i_mapping);
- out:
-	inode_unlock(inode);
+out:
 	free_xid(xid);
 	return rc;
 }
