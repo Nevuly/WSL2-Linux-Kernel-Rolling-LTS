@@ -123,7 +123,7 @@ static int exp_event_cb(unsigned int events, const struct nf_exp_event *item)
 }
 #endif
 
-static int nft_fullcone_validate(const struct nft_ctx *ctx, const struct nft_expr *expr, const struct nft_data **data)
+static int nft_fullcone_validate(const struct nft_ctx *ctx, const struct nft_expr *expr)
 {
 	int err;
 
