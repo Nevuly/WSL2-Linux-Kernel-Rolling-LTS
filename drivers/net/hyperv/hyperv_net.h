@@ -1199,6 +1199,7 @@ struct netvsc_device {
 	u32 num_chn;
 
 	atomic_t open_chn;
+	atomic_t open_chn_ok;
 	struct work_struct subchan_work;
 	wait_queue_head_t subchan_open;
 
