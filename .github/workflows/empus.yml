@@ -3,9 +3,7 @@ name: LTS EMPUS Kernel CI
 on:
   push:
     tags:
-      - 'linux-wsl-lts-6.6.[0-9]+-empus-[0-9]+'
-      - 'linux-wsl-lts-6.6.[0-9]+-empus-[0-9]+.[0-9]+'
-      - 'linux-wsl-lts-6.6.[0-9]+-empus-[0-9]+.[0-9]+.[0-9]+'
+      - 'linux-wsl-lts-6.6.[0-9]+.[0-9]+-empus-[0-9]+'
 
 run-name: LTS EMPUS Build ${{ github.ref_name }}
 
