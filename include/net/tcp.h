@@ -54,7 +54,15 @@ extern struct inet_hashinfo tcp_hashinfo;
 DECLARE_PER_CPU(unsigned int, tcp_orphan_count);
 int tcp_orphan_count_sum(void);
 
-DECLARE_PER_CPU(u32, tcp_tw_isn);
+static inline void tcp_orphan_count_inc(void)
+{
+	this_cpu_inc(tcp_orphan_count);
+}
+
+static inline void tcp_orphan_count_dec(void)
+{
+	this_cpu_dec(tcp_orphan_count);
+}
 
 void tcp_time_wait(struct sock *sk, int state, int timeo);
 
@@ -275,7 +283,7 @@ extern unsigned long tcp_memory_pressure;
 /* optimized version of sk_under_memory_pressure() for TCP sockets */
 static inline bool tcp_under_memory_pressure(const struct sock *sk)
 {
-	if (mem_cgroup_sockets_enabled && sk->sk_memcg &&
+	if (mem_cgroup_sk_enabled(sk) &&
 	    mem_cgroup_under_socket_pressure(sk->sk_memcg))
 		return true;
 
@@ -953,10 +961,13 @@ struct tcp_skb_cb {
 	__u32		seq;		/* Starting sequence number	*/
 	__u32		end_seq;	/* SEQ + FIN + SYN + datalen	*/
 	union {
-		/* Note :
+		/* Notes :
+		 *	tcp_tw_isn is used in input path only
+		 *	(isn chosen by tcp_timewait_state_process())
 		 * 	  tcp_gso_segs/size are used in write queue only,
 		 *	  cf tcp_skb_pcount()/tcp_skb_mss()
 		 */
+		u32		tcp_tw_isn;
 		struct {
 			u16	tcp_gso_segs;
 			u16	tcp_gso_size;

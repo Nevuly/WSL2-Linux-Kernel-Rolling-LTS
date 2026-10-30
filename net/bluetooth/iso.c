@@ -60,6 +60,7 @@ enum {
 	BT_SK_BIG_SYNC,
 	BT_SK_PA_SYNC,
 	BT_SK_KILLED,
+	BT_SK_CONNECTING,
 };
 
 struct iso_pinfo {
@@ -105,9 +106,6 @@ static void iso_conn_free(struct kref *ref)
 	struct iso_conn *conn = container_of(ref, struct iso_conn, ref);
 
 	BT_DBG("conn %p", conn);
-
-	if (conn->sk)
-		iso_pi(conn->sk)->conn = NULL;
 
 	if (conn->hcon) {
 		conn->hcon->iso_data = NULL;
@@ -208,7 +206,6 @@ static struct iso_conn *iso_conn_add(struct hci_conn *hcon)
 			conn->hcon = hcon;
 			iso_conn_unlock(conn);
 		}
-		iso_conn_put(conn);
 		return conn;
 	}
 
@@ -261,6 +258,7 @@ static void iso_chan_del(struct sock *sk, int err)
 }
 
 static void iso_conn_del(struct hci_conn *hcon, int err)
+	__must_hold(&hcon->hdev->lock)
 {
 	struct iso_conn *conn = hcon->iso_data;
 	struct sock *sk;
@@ -275,12 +273,9 @@ static void iso_conn_del(struct hci_conn *hcon, int err)
 	iso_conn_lock(conn);
 	sk = iso_sock_hold(conn);
 	iso_conn_unlock(conn);
-	iso_conn_put(conn);
 
-	if (!sk) {
-		iso_conn_put(conn);
-		return;
-	}
+	if (!sk)
+		goto done;
 
 	iso_sock_disable_timer(sk);
 
@@ -289,6 +284,15 @@ static void iso_conn_del(struct hci_conn *hcon, int err)
 	release_sock(sk);
 	iso_sock_kill(sk);
 	sock_put(sk);
+
+done:
+	/* No sk access to conn->hcon any more (lock_sock + hdev->lock) */
+	iso_conn_lock(conn);
+	conn->hcon = NULL;
+	hcon->iso_data = NULL;
+	iso_conn_unlock(conn);
+
+	iso_conn_put(conn);
 }
 
 static int __iso_chan_add(struct iso_conn *conn, struct sock *sk,
@@ -304,6 +308,15 @@ static int __iso_chan_add(struct iso_conn *conn, struct sock *sk,
 		return -EBUSY;
 	}
 
+	if (iso_pi(sk)->conn)
+		return -EISCONN;
+
+	if (!conn->hcon) {
+		BT_ERR("conn->hcon missing");
+		return -EIO;
+	}
+
+	kref_get(&conn->ref);
 	iso_pi(sk)->conn = conn;
 	conn->sk = sk;
 	clear_bit(ISO_CONN_DROPPED, conn->flags);
@@ -357,6 +370,12 @@ static int iso_connect_bis(struct sock *sk)
 		return -EHOSTUNREACH;
 
 	hci_dev_lock(hdev);
+	lock_sock(sk);
+
+	if (iso_pi(sk)->conn) {
+		err = -EISCONN;
+		goto unlock;
+	}
 
 	if (!bis_capable(hdev)) {
 		err = -EOPNOTSUPP;
@@ -407,13 +426,10 @@ static int iso_connect_bis(struct sock *sk)
 		goto unlock;
 	}
 
-	lock_sock(sk);
-
 	err = iso_chan_add(conn, sk, NULL);
-	if (err) {
-		release_sock(sk);
+	iso_conn_put(conn);
+	if (err)
 		goto unlock;
-	}
 
 	/* Update source addr of the socket */
 	bacpy(&iso_pi(sk)->src, &hcon->src);
@@ -429,9 +445,8 @@ static int iso_connect_bis(struct sock *sk)
 		iso_sock_set_timer(sk, sk->sk_sndtimeo);
 	}
 
-	release_sock(sk);
-
 unlock:
+	release_sock(sk);
 	hci_dev_unlock(hdev);
 	hci_dev_put(hdev);
 	return err;
@@ -444,6 +459,7 @@ static int iso_connect_cis(struct sock *sk)
 	struct hci_dev  *hdev;
 	bdaddr_t src, dst;
 	u8 src_type;
+	bool already_attached;
 	int err;
 
 	lock_sock(sk);
@@ -459,6 +475,7 @@ static int iso_connect_cis(struct sock *sk)
 		return -EHOSTUNREACH;
 
 	hci_dev_lock(hdev);
+	lock_sock(sk);
 
 	if (!cis_central_capable(hdev)) {
 		err = -EOPNOTSUPP;
@@ -497,6 +514,13 @@ static int iso_connect_cis(struct sock *sk)
 		}
 	}
 
+	/* The socket lock keeps the current attachment and its hcon stable. */
+	if (iso_pi(sk)->conn && iso_pi(sk)->conn->hcon != hcon) {
+		hci_conn_drop(hcon);
+		err = -EISCONN;
+		goto unlock;
+	}
+
 	conn = iso_conn_add(hcon);
 	if (!conn) {
 		hci_conn_drop(hcon);
@@ -504,13 +528,16 @@ static int iso_connect_cis(struct sock *sk)
 		goto unlock;
 	}
 
-	lock_sock(sk);
+	iso_conn_lock(conn);
+	already_attached = iso_pi(sk)->conn == conn && conn->sk == sk;
+	iso_conn_unlock(conn);
 
 	err = iso_chan_add(conn, sk, NULL);
-	if (err) {
-		release_sock(sk);
+	iso_conn_put(conn);
+	if (already_attached || err == -EBUSY)
+		hci_conn_drop(hcon);
+	if (err)
 		goto unlock;
-	}
 
 	/* Update source addr of the socket */
 	bacpy(&iso_pi(sk)->src, &hcon->src);
@@ -526,9 +553,8 @@ static int iso_connect_cis(struct sock *sk)
 		iso_sock_set_timer(sk, sk->sk_sndtimeo);
 	}
 
-	release_sock(sk);
-
 unlock:
+	release_sock(sk);
 	hci_dev_unlock(hdev);
 	hci_dev_put(hdev);
 	return err;
@@ -1117,17 +1143,26 @@ static int iso_sock_connect(struct socket *sock, struct sockaddr *addr,
 	    addr->sa_family != AF_BLUETOOTH)
 		return -EINVAL;
 
-	if (sk->sk_state != BT_OPEN && sk->sk_state != BT_BOUND)
-		return -EBADFD;
+	lock_sock(sk);
 
-	if (sk->sk_type != SOCK_SEQPACKET)
-		return -EINVAL;
+	if ((sk->sk_state != BT_OPEN && sk->sk_state != BT_BOUND) ||
+	    test_bit(BT_SK_CONNECTING, &iso_pi(sk)->flags)) {
+		err = -EBADFD;
+		goto done;
+	}
+
+	if (sk->sk_type != SOCK_SEQPACKET) {
+		err = -EINVAL;
+		goto done;
+	}
 
 	/* Check if the address type is of LE type */
-	if (!bdaddr_type_is_le(sa->iso_bdaddr_type))
-		return -EINVAL;
+	if (!bdaddr_type_is_le(sa->iso_bdaddr_type)) {
+		err = -EINVAL;
+		goto done;
+	}
 
-	lock_sock(sk);
+	set_bit(BT_SK_CONNECTING, &iso_pi(sk)->flags);
 
 	bacpy(&iso_pi(sk)->dst, &sa->iso_bdaddr);
 	iso_pi(sk)->dst_type = sa->iso_bdaddr_type;
@@ -1139,16 +1174,18 @@ static int iso_sock_connect(struct socket *sock, struct sockaddr *addr,
 	else
 		err = iso_connect_bis(sk);
 
-	if (err)
-		return err;
-
 	lock_sock(sk);
+
+	clear_bit(BT_SK_CONNECTING, &iso_pi(sk)->flags);
+	if (err)
+		goto done;
 
 	if (!test_bit(BT_SK_DEFER_SETUP, &bt_sk(sk)->flags)) {
 		err = bt_sock_wait_state(sk, BT_CONNECTED,
 					 sock_sndtimeo(sk, flags & O_NONBLOCK));
 	}
 
+done:
 	release_sock(sk);
 	return err;
 }
@@ -1188,6 +1225,11 @@ static int iso_listen_bis(struct sock *sk)
 	hci_dev_lock(hdev);
 	lock_sock(sk);
 
+	if (sk->sk_state != BT_BOUND || iso_pi(sk)->conn) {
+		err = -EBADFD;
+		goto unlock;
+	}
+
 	/* Fail if user set invalid QoS */
 	if (iso_pi(sk)->qos_user_set && !check_bcast_qos(&iso_pi(sk)->qos)) {
 		iso_pi(sk)->qos = default_qos;
@@ -1211,10 +1253,9 @@ static int iso_listen_bis(struct sock *sk)
 	}
 
 	err = iso_chan_add(conn, sk, NULL);
-	if (err) {
-		hci_conn_drop(hcon);
+	iso_conn_put(conn);
+	if (err)
 		goto unlock;
-	}
 
 unlock:
 	release_sock(sk);
@@ -1356,6 +1397,7 @@ static int iso_sock_getname(struct socket *sock, struct sockaddr *addr,
 
 	BT_DBG("sock %p, sk %p", sock, sk);
 
+	memset(sa, 0, sizeof(struct sockaddr_iso));
 	addr->sa_family = AF_BLUETOOTH;
 
 	if (peer) {
@@ -1939,23 +1981,17 @@ static void iso_sock_ready(struct sock *sk)
 {
 	BT_DBG("sk %p", sk);
 
-	if (!sk)
-		return;
-
-	lock_sock(sk);
+	lockdep_assert(lockdep_sock_is_held(sk));
 
 	switch (sk->sk_state) {
 	case BT_DISCONN:
 	case BT_CLOSED:
-		release_sock(sk);
 		return;
 	}
 
 	iso_sock_clear_timer(sk);
 	sk->sk_state = BT_CONNECTED;
 	sk->sk_state_change(sk);
-
-	release_sock(sk);
 }
 
 static bool iso_match_big(struct sock *sk, void *data)
@@ -1973,7 +2009,7 @@ static bool iso_match_pa_sync_flag(struct sock *sk, void *data)
 static void iso_conn_ready(struct iso_conn *conn)
 {
 	struct sock *parent = NULL;
-	struct sock *sk = conn->sk;
+	struct sock *sk;
 	struct hci_ev_le_big_sync_estabilished *ev = NULL;
 	struct hci_ev_le_pa_sync_established *ev2 = NULL;
 	struct hci_ev_le_per_adv_report *ev3 = NULL;
@@ -1981,8 +2017,26 @@ static void iso_conn_ready(struct iso_conn *conn)
 
 	BT_DBG("conn %p", conn);
 
+	iso_conn_lock(conn);
+	sk = iso_sock_hold(conn);
+	iso_conn_unlock(conn);
+
 	if (sk) {
-		iso_sock_ready(conn->sk);
+		lock_sock(sk);
+
+		/* conn->sk may have become NULL if racing with sk close, but
+		 * due to held hdev->lock, it can't become different sk.
+		 */
+		if (!conn->sk) {
+			release_sock(sk);
+			sock_put(sk);
+			return;
+		}
+
+		iso_sock_ready(sk);
+
+		release_sock(sk);
+		sock_put(sk);
 	} else {
 		hcon = conn->hcon;
 		if (!hcon)
@@ -2164,8 +2218,10 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 		sk = iso_get_sock(&hdev->bdaddr, bdaddr, BT_LISTEN,
 				  iso_match_sid, ev1);
 		if (sk && !ev1->status) {
+			lock_sock(sk);
 			iso_pi(sk)->sync_handle = le16_to_cpu(ev1->handle);
 			iso_pi(sk)->bc_sid = ev1->sid;
+			release_sock(sk);
 		}
 
 		goto done;
@@ -2192,27 +2248,35 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 					  ev2);
 
 		if (sk) {
-			int err;
-			struct hci_conn	*hcon = iso_pi(sk)->conn->hcon;
+			int err = 0;
+			bool big_sync;
+			struct hci_conn *hcon;
 
+			lock_sock(sk);
+
+			hcon = iso_pi(sk)->conn->hcon;
 			iso_pi(sk)->qos.bcast.encryption = ev2->encryption;
 
 			if (ev2->num_bis < iso_pi(sk)->bc_num_bis)
 				iso_pi(sk)->bc_num_bis = ev2->num_bis;
 
-			if (!test_bit(BT_SK_DEFER_SETUP, &bt_sk(sk)->flags) &&
-			    !test_and_set_bit(BT_SK_BIG_SYNC, &iso_pi(sk)->flags)) {
+			big_sync = !test_bit(BT_SK_DEFER_SETUP, &bt_sk(sk)->flags) &&
+				   !test_and_set_bit(BT_SK_BIG_SYNC, &iso_pi(sk)->flags);
+
+			if (big_sync)
 				err = hci_conn_big_create_sync(hdev, hcon,
 							       &iso_pi(sk)->qos,
 							       iso_pi(sk)->sync_handle,
 							       iso_pi(sk)->bc_num_bis,
 							       iso_pi(sk)->bc_bis);
-				if (err) {
-					bt_dev_err(hdev, "hci_le_big_create_sync: %d",
-						   err);
-					sock_put(sk);
-					sk = NULL;
-				}
+
+			release_sock(sk);
+
+			if (big_sync && err) {
+				bt_dev_err(hdev, "hci_le_big_create_sync: %d",
+					   err);
+				sock_put(sk);
+				sk = NULL;
 			}
 		}
 
@@ -2230,9 +2294,11 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 		if (!sk)
 			goto done;
 
-		hcon = iso_pi(sk)->conn->hcon;
+		lock_sock(sk);
+
+		hcon = iso_pi(sk)->conn ? iso_pi(sk)->conn->hcon : NULL;
 		if (!hcon)
-			goto done;
+			goto release3;
 
 		if (ev3->data_status == LE_PA_DATA_TRUNCATED) {
 			/* The controller was unable to retrieve PA data. */
@@ -2240,12 +2306,12 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 			       HCI_MAX_PER_AD_TOT_LEN);
 			hcon->le_per_adv_data_len = 0;
 			hcon->le_per_adv_data_offset = 0;
-			goto done;
+			goto release3;
 		}
 
 		if (hcon->le_per_adv_data_offset + ev3->length >
 		    HCI_MAX_PER_AD_TOT_LEN)
-			goto done;
+			goto release3;
 
 		memcpy(hcon->le_per_adv_data + hcon->le_per_adv_data_offset,
 		       ev3->data, ev3->length);
@@ -2264,16 +2330,21 @@ int iso_connect_ind(struct hci_dev *hdev, bdaddr_t *bdaddr, __u8 *flags)
 						    &base_len);
 
 			if (!base || base_len > BASE_MAX_LENGTH)
-				goto done;
+				goto release3;
 
+			lock_sock(sk);
 			memcpy(iso_pi(sk)->base, base, base_len);
 			iso_pi(sk)->base_len = base_len;
+			release_sock(sk);
 		} else {
 			/* This is a PA data fragment. Keep pa_data_len set to 0
 			 * until all data has been reassembled.
 			 */
 			hcon->le_per_adv_data_len = 0;
 		}
+
+release3:
+		release_sock(sk);
 	} else {
 		sk = iso_get_sock(&hdev->bdaddr, BDADDR_ANY,
 				  BT_LISTEN, NULL, NULL);
@@ -2292,6 +2363,7 @@ done:
 }
 
 static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
+	__must_hold(&hcon->hdev->lock)
 {
 	if (hcon->type != CIS_LINK && hcon->type != BIS_LINK &&
 	    hcon->type != PA_LINK) {
@@ -2303,8 +2375,10 @@ static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 			struct hci_link *link, *t;
 
 			list_for_each_entry_safe(link, t, &hcon->link_list,
-						 list)
+						 list) {
+				lockdep_assert_held(&link->conn->hdev->lock);
 				iso_conn_del(link->conn, bt_to_errno(status));
+			}
 
 			return;
 		}
@@ -2326,14 +2400,17 @@ static void iso_connect_cfm(struct hci_conn *hcon, __u8 status)
 		struct iso_conn *conn;
 
 		conn = iso_conn_add(hcon);
-		if (conn)
+		if (conn) {
 			iso_conn_ready(conn);
+			iso_conn_put(conn);
+		}
 	} else {
 		iso_conn_del(hcon, bt_to_errno(status));
 	}
 }
 
 static void iso_disconn_cfm(struct hci_conn *hcon, __u8 reason)
+	__must_hold(&hcon->hdev->lock)
 {
 	if (hcon->type != CIS_LINK && hcon->type !=  BIS_LINK &&
 	    hcon->type != PA_LINK)
